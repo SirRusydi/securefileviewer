@@ -51,8 +51,6 @@
             max-width: 100%;
             height: auto;
         }
-
-        /* Un-hide the file input styles, as we're not using it. */
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen" oncontextmenu="return false;">
@@ -60,8 +58,20 @@
 
     <div id="app-container" class="w-full max-w-4xl p-6 bg-gray-800 rounded-lg shadow-xl">
 
-        <!-- 1. Start Screen -->
-        <div id="start-screen" class="text-center">
+        <!-- 1. Passcode Screen (New) -->
+        <div id="passcode-screen" class="text-center">
+            <h1 class="text-3xl font-bold mb-4">Enter Passcode</h1>
+            <p class="text-gray-400 mb-6">Please enter the passcode to access the document.</p>
+            <input type="password" id="passcode-input" class="w-full max-w-xs mx-auto bg-gray-700 text-white p-3 rounded-lg text-center mb-4" placeholder="••••••••">
+            <button id="passcode-submit-button" class="w-full max-w-xs mx-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
+                Submit
+            </button>
+            <p id="passcode-error" class="text-red-500 mt-4 hidden">Invalid passcode. Please try again.</p>
+        </div>
+
+
+        <!-- 2. Start Screen (Hidden by default) -->
+        <div id="start-screen" class="hidden text-center">
             <h1 class="text-3xl font-bold mb-4">Secure Document</h1>
             <p class="text-gray-400 mb-6">You will have 1 hour to review this document. Viewing will begin immediately.</p>
             <button id="start-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
@@ -69,7 +79,7 @@
             </button>
         </div>
 
-        <!-- 2. Viewer Screen (Hidden by default) -->
+        <!-- 3. Viewer Screen (Hidden by default) -->
         <div id="viewer-screen" class="hidden">
             <!-- Header with Timer -->
             <div class="flex justify-between items-center mb-4 p-4 bg-gray-700 rounded-lg">
@@ -97,7 +107,7 @@
             </div>
         </div>
 
-        <!-- 3. Expired Screen (Hidden by default) -->
+        <!-- 4. Expired Screen (Hidden by default) -->
         <div id="expired-screen" class="hidden text-center">
             <h1 class="text-4xl font-bold text-red-500 mb-4">Session Expired</h1>
             <p class="text-gray-400 text-lg mb-6">Your viewing time for this document has ended.</p>
@@ -110,6 +120,9 @@
     <script>
         // --- CONFIGURATION ---
 
+        // !!! SET YOUR PASSCODE HERE !!!
+        const CORRECT_PASSCODE = '4flatPSPM'; // User must enter this to proceed
+
         // !!! IMPORTANT !!!
         // PASTE YOUR RAW GITHUB URL HERE
         // It must be the "raw" URL, not the normal GitHub page URL.
@@ -120,6 +133,11 @@
         let timeRemaining = INITIAL_TIME;
 
         // --- DOM ELEMENTS ---
+        const passcodeScreen = document.getElementById('passcode-screen');
+        const passcodeInput = document.getElementById('passcode-input');
+        const passcodeSubmitButton = document.getElementById('passcode-submit-button');
+        const passcodeError = document.getElementById('passcode-error');
+
         const startScreen = document.getElementById('start-screen');
         const startButton = document.getElementById('start-button');
         const viewerScreen = document.getElementById('viewer-screen');
@@ -134,14 +152,33 @@
         let pdfDoc = null;
 
         // --- EVENT LISTENERS ---
+        passcodeSubmitButton.addEventListener('click', handlePasscodeSubmit);
         startButton.addEventListener('click', startSession);
         resetButton.addEventListener('click', resetSession);
 
         // --- FUNCTIONS ---
         // (All functions are now correctly at the top level)
 
+
         /**
-         * 1. Starts the viewing session
+         * 1. Handles Passcode Submission
+         */
+        function handlePasscodeSubmit() {
+            const enteredPasscode = passcodeInput.value;
+            if (enteredPasscode === CORRECT_PASSCODE) {
+                // Correct passcode
+                passcodeScreen.classList.add('hidden');
+                startScreen.classList.remove('hidden');
+                passcodeError.classList.add('hidden');
+                passcodeInput.value = ''; // Clear input
+            } else {
+                // Incorrect passcode
+                passcodeError.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * 2. Starts the viewing session
          */
         function startSession() {
             startScreen.classList.add('hidden');
@@ -153,7 +190,7 @@
         }
 
         /**
-         * 2. Starts the countdown timer
+         * 3. Starts the countdown timer
          */
         function startTimer() {
             timeRemaining = INITIAL_TIME; // Reset timer
@@ -169,7 +206,7 @@
         }
 
         /**
-         * 3. Updates the timer text (e.g., "59:30")
+         * 4. Updates the timer text (e.g., "59:30")
          */
         function updateTimerDisplay() {
             const minutes = Math.floor(timeRemaining / 60).toString().padStart(2, '0');
@@ -178,7 +215,7 @@
         }
 
         /**
-         * 4. Loads the PDF document using the PDF_URL
+         * 5. Loads the PDF document using the PDF_URL
          */
         async function loadDocument() {
             try {
@@ -202,7 +239,7 @@
         }
 
         /**
-         * 5. Renders a single PDF page to a <canvas>
+         * 6. Renders a single PDF page to a <canvas>
          */
         async function renderPage(pageNum) {
             // Check if pdfDoc is still valid (session might have ended)
@@ -228,7 +265,7 @@
         }
 
         /**
-         * 6. Ends the session when time runs out
+         * 7. Ends the session when time runs out
          */
         function endSession() {
             clearInterval(timerInterval); // Stop the timer
@@ -244,11 +281,12 @@
         }
 
         /**
-         * 7. Resets the app to the start screen
+         * 8. Resets the app to the passcode screen
          */
         function resetSession() {
             expiredScreen.classList.add('hidden');
-            startScreen.classList.remove('hidden');
+            passcodeScreen.classList.remove('hidden'); // Go back to passcode screen
+            startScreen.classList.add('hidden'); // Hide the start screen again
             
             // Clear the old PDF canvases and restore the loading spinner
             pdfViewer.innerHTML = loadingSpinnerHTML;
@@ -262,5 +300,4 @@
 
 </body>
 </html>
-
 
