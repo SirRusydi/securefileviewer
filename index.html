@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure PDF Viewer</title>
+    <!-- 1. Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        // 3. Set the worker 'src' path for PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+    <style>
+        /* 4. These styles are basic deterrents */
+        body {
+            /* Prevents text selection */
+            -webkit-user-select: none; /* Safari */
+            -ms-user-select: none; /* IE 10+ */
+            user-select: none; /* Standard */
+        }
+        
+        /* The main viewer area */
+        #pdf-viewer {
+            position: relative;
+            overflow-y: auto;
+            /* We'll set height in JS */
+        }
+
+        /* The watermark overlay */
+        #watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 5vw; /* Scales with viewport */
+            color: rgba(255, 0, 0, 0.15); /* Faint red */
+            font-weight: bold;
+            pointer-events: none; /* Lets you click "through" it */
+            z-index: 9999;
+            text-transform: uppercase;
+        }
+
+        /* Styles for the rendered PDF pages (as canvases) */
+        #pdf-viewer canvas {
+            display: block;
+            margin: 20px auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Un-hide the file input styles, as we're not using it. */
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen" oncontextmenu="return false;">
+    <!-- Prevent right-click context menu -->
+
+    <div id="app-container" class="w-full max-w-4xl p-6 bg-gray-800 rounded-lg shadow-xl">
+
+        <!-- 1. Start Screen -->
+        <div id="start-screen" class="text-center">
+            <h1 class="text-3xl font-bold mb-4">Secure Document</h1>
+            <p class="text-gray-400 mb-6">You will have 1 minute to review this document. Viewing will begin immediately.</p>
+            <button id="start-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
+                Start Secure Session
+            </button>
+        </div>
+
+        <!-- 2. Viewer Screen (Hidden by default) -->
+        <div id="viewer-screen" class="hidden">
+            <!-- Header with Timer -->
+            <div class="flex justify-between items-center mb-4 p-4 bg-gray-700 rounded-lg">
+                <h2 class="text-xl font-bold">Document Viewer</h2>
+                <div id="timer" class="text-lg font-mono bg-red-600 text-white px-4 py-2 rounded-md">
+                    01:00
+                </div>
+            </div>
+
+            <!-- This is where the PDF pages will be rendered -->
+            <div id="pdf-viewer" class="bg-gray-200 rounded-lg" style="height: 70vh;">
+                <!-- Loading Spinner -->
+                <div id="loading" class="flex items-center justify-center h-full">
+                    <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-xl text-gray-700">Loading Document...</span>
+                </div>
+            </div>
+
+            <!-- Watermark (dynamically shown) -->
+            <div id="watermark" class="hidden">
+                Confidential
+            </div>
+        </div>
+
+        <!-- 3. Expired Screen (Hidden by default) -->
+        <div id="expired-screen" class="hidden text-center">
+            <h1 class="text-4xl font-bold text-red-500 mb-4">Session Expired</h1>
+            <p class="text-gray-400 text-lg mb-6">Your viewing time for this document has ended.</p>
+            <button id="reset-button" class="w-full max-w-xs mx-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
+                Start New Session
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+
+        // !!! IMPORTANT !!!
+        // PASTE YOUR RAW GITHUB URL HERE
+        // It must be the "raw" URL, not the normal GitHub page URL.
+        const PDF_URL = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+
+        // Timer in seconds. Set to 3600 for 1 hour.
+        // I'm using 60 seconds for this demo.
+        const INITIAL_TIME = 60; // 3600 = 1 hour
+        let timeRemaining = INITIAL_TIME;
+
+        // --- DOM ELEMENTS ---
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('start-button');
+        const viewerScreen = document.getElementById('viewer-screen');
+        const expiredScreen = document.getElementById('expired-screen');
+        const resetButton = document.getElementById('reset-button');
+        const timerDisplay = document.getElementById('timer');
+        const pdfViewer = document.getElementById('pdf-viewer');
+        const watermark = document.getElementById('watermark');
+        const loadingSpinnerHTML = document.getElementById('loading').outerHTML; // Store spinner HTML
+
+        let timerInterval = null;
+        let pdfDoc = null;
+
+        // --- EVENT LISTENERS ---
+        startButton.addEventListener('click', startSession);
+        resetButton.addEventListener('click', resetSession);
+
+        // --- FUNCTIONS ---
+        // (All functions are now correctly at the top level)
+
+        /**
+         * 1. Starts the viewing session
+         */
+        function startSession() {
+            startScreen.classList.add('hidden');
+            viewerScreen.classList.remove('hidden');
+            watermark.classList.remove('hidden');
+
+            startTimer();
+            loadDocument();
+        }
+
+        /**
+         * 2. Starts the countdown timer
+         */
+        function startTimer() {
+            timeRemaining = INITIAL_TIME; // Reset timer
+            updateTimerDisplay(); // Show initial time
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+
+                if (timeRemaining <= 0) {
+                    endSession();
+                }
+            }, 1000);
+        }
+
+        /**
+         * 3. Updates the timer text (e.g., "59:30")
+         */
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeRemaining / 60).toString().padStart(2, '0');
+            const seconds = (timeRemaining % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${minutes}:${seconds}`;
+        }
+
+        /**
+         * 4. Loads the PDF document using the PDF_URL
+         */
+        async function loadDocument() {
+            try {
+                // Get the document from the URL
+                pdfDoc = await pdfjsLib.getDocument(PDF_URL).promise;
+                
+                // Hide spinner
+                const loadingSpinner = document.getElementById('loading');
+                if(loadingSpinner) loadingSpinner.classList.add('hidden'); 
+
+                // Loop through all pages and render them
+                for (let i = 1; i <= pdfDoc.numPages; i++) {
+                    // Check if session ended while loading
+                    if (!timerInterval) break; 
+                    await renderPage(i);
+                }
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                pdfViewer.innerHTML = '<p class="text-center text-red-500 p-10">Error loading document. Check the PDF_URL and CORS policy.</p>';
+            }
+        }
+
+        /**
+         * 5. Renders a single PDF page to a <canvas>
+         */
+        async function renderPage(pageNum) {
+            // Check if pdfDoc is still valid (session might have ended)
+            if (!pdfDoc) return; 
+
+            const page = await pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.5 });
+            
+            // Create canvas element
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            // Render PDF page into canvas context
+            await page.render({
+                canvasContext: context,
+                viewport: viewport
+            }).promise;
+
+            // Append canvas to the viewer
+            pdfViewer.appendChild(canvas);
+        }
+
+        /**
+         * 6. Ends the session when time runs out
+         */
+        function endSession() {
+            clearInterval(timerInterval); // Stop the timer
+            timerInterval = null; // Mark session as ended
+            pdfDoc = null; // Clear PDF document object
+
+            // Hide viewer and show expired message
+            viewerScreen.classList.add('hidden');
+            watermark.classList.add('hidden');
+            expiredScreen.classList.remove('hidden');
+            
+            console.log('Session expired.');
+        }
+
+        /**
+         * 7. Resets the app to the start screen
+         */
+        function resetSession() {
+            expiredScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            
+            // Clear the old PDF canvases and restore the loading spinner
+            pdfViewer.innerHTML = loadingSpinnerHTML;
+            
+            // Reset timer variable (will be set again in startTimer)
+            timeRemaining = INITIAL_TIME;
+            updateTimerDisplay(); // Show reset time
+        }
+
+    </script>
+
+</body>
+</html>
+
