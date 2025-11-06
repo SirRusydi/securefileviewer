@@ -63,7 +63,7 @@
         <!-- 1. Start Screen -->
         <div id="start-screen" class="text-center">
             <h1 class="text-3xl font-bold mb-4">Secure Document</h1>
-            <p class="text-gray-400 mb-6">You will have 1 minute to review this document. Viewing will begin immediately.</p>
+            <p class="text-gray-400 mb-6">You will have 1 hour to review this document. Viewing will begin immediately.</p>
             <button id="start-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
                 Start Secure Session
             </button>
@@ -75,7 +75,7 @@
             <div class="flex justify-between items-center mb-4 p-4 bg-gray-700 rounded-lg">
                 <h2 class="text-xl font-bold">Document Viewer</h2>
                 <div id="timer" class="text-lg font-mono bg-red-600 text-white px-4 py-2 rounded-md">
-                    01:00
+                    60:00
                 </div>
             </div>
 
@@ -113,11 +113,10 @@
         // !!! IMPORTANT !!!
         // PASTE YOUR RAW GITHUB URL HERE
         // It must be the "raw" URL, not the normal GitHub page URL.
-        const PDF_URL = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+        const PDF_URL = 'https://raw.githubusercontent.com/SirRusydi/securefileviewer/main/answerKMM.pdf';
 
         // Timer in seconds. Set to 3600 for 1 hour.
-        // I'm using 60 seconds for this demo.
-        const INITIAL_TIME = 60; // 3600 = 1 hour
+        const INITIAL_TIME = 3600; // 3600 = 1 hour
         let timeRemaining = INITIAL_TIME;
 
         // --- DOM ELEMENTS ---
@@ -263,4 +262,5 @@
 
 </body>
 </html>
+
 
